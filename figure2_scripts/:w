@@ -1,0 +1,185 @@
+set.seed(1234)
+n <- 1000
+m <- 500
+Nd <- (n*(n-1))/2
+Nz <- (Nd*(Nd-1))/2
+#((n+n)*(n+n-1))/2
+pct_samps <- c(.00005,.0005,.005,.05)
+#Nz_tmp <- sapply(n_orders, function(x)  ((x+x)*(x+x-1))/2 )
+## 2 datasets (1 and 2 clusters)
+#first dataset, assign random labels
+dat1 <- sapply(1:n, function(i) rnorm(n=m,mean=0,sd=1))
+labs1 <- round(runif(n=n))
+ind1 <- sapply(labs1, function(x) sapply(labs1, function(y) x==y))
+#tmp <- ind1[upper.tri(ind1)]
+ind1 <- ind1[upper.tri(ind1)]
+ind1_intra <- which(ind1)
+ind1_inter <- which(!ind1)
+dist1 <- as.matrix(dist(t(dat1)))
+dist1 <- dist1[upper.tri(dist1)]
+intra1 <- dist1[ind1_intra]
+inter1 <- dist1[ind1_inter]
+#calculate true g+
+ptm <- proc.time()
+gp1_true <- 1-sum(sapply(intra1, function(x) sum(x>inter1))) / Nz
+t1 <- proc.time() - ptm
+t1 <- t1[3]
+
+#estimate g+ using order statisttcs
+#sort for estimator
+intra1 <- sort(intra1)
+inter1 <- sort(inter1)
+#loop over perctange of distances to sample
+gp1_estm <- lapply(pct_samps, function(x) {
+  n_samp <- round(x*length(ind1))
+  Nz_samp <- ((n_samp+n_samp)*(n_samp+n_samp-1))/2
+  orders_inter <- round(seq(1,length(inter1),length.out=n_samp))
+  orders_intra <- round(seq(1,length(intra1),length.out=n_samp))
+  ptm <- proc.time()
+  gp_samp <- 1-sum(sapply(intra1[orders_intra], function(x) sum(x > inter1[orders_inter]))) / Nz_samp
+  t1 <- proc.time() - ptm  
+  return(list(gp_samp,t1[3]))
+})
+
+#second dataset, real labels (based on simulated cluster)
+dat2 <- cbind(
+  sapply(1:(n/2), function(i) rnorm(n=m,mean=0.5,sd=1)),
+  sapply(1:(n/2), function(i) rnorm(n=m,mean=-0.5,sd=1))
+)
+labs2 <- c(rep(0,n/2),rep(1,n/2))
+ind2 <- sapply(labs2, function(x) sapply(labs2, function(y) x==y))
+#tmp <- ind2[upper.tri(ind2)]
+ind2 <- ind2[upper.tri(ind2)]
+ind2_intra <- which(ind2)
+ind2_inter <- which(!ind2)
+dist2 <- as.matrix(dist(t(dat2)))
+dist2 <- dist2[upper.tri(dist2)]
+intra2 <- dist2[ind2_intra]
+inter2 <- dist2[ind2_inter]
+#calculate true g+
+ptm <- proc.time()
+gp2_true <- 1-sum(sapply(intra2, function(x) sum(x>inter2))) / Nz
+t2 <- proc.time() - ptm
+t2 <- t2[3]
+
+#estimate g+ using order statisttcs
+#sort for estimator
+intra2 <- sort(intra2)
+inter2 <- sort(inter2)
+#loop over perctange of distances to sample
+gp2_estm <- lapply(pct_samps, function(x) {
+  n_samp <- round(x*length(ind2))
+  Nz_samp <- ((n_samp+n_samp)*(n_samp+n_samp-1))/2
+  orders_inter <- round(seq(1,length(inter2),length.out=n_samp))
+  orders_intra <- round(seq(1,length(intra2),length.out=n_samp))
+  ptm <- proc.time()
+  gp_samp <- 1-sum(sapply(intra2[orders_intra], function(x) sum(x > inter2[orders_inter]))) / Nz_samp
+  t2 <- proc.time() - ptm
+  return(list(gp_samp,t2[3]))
+})
+
+pca1 <- prcomp(t(dat1))$x
+pca2 <- prcomp(t(dat2))$x
+
+#final plot, 4 rows x 2 columns
+#row 1, PCA plots of 2 simulated datasets
+#row 2, histgrams of inter and intra-cluster distances
+#row 3, asymptotic G+ of estimator
+#row 4, asymptotic time properties of estimator
+
+cl1 <- '#0000ff64' #blue
+cl2 <- '#ff000064' #red
+
+cols1 <- ifelse(labs1==1,cl1,cl2)
+cols2 <- ifelse(labs2==1,cl1,cl2)
+
+bins <- seq(floor(min(c(dist1,dist2))),ceiling(max(c(dist1,dist2))),length.out=20)
+
+plotlocs <- rbind(
+  c(0.10,0.50,0.75,1.00), #row1 col1
+  c(0.55,0.95,0.75,1.00), #row1 col2
+  c(0.10,0.50,0.55,0.70), #row2 col1
+  c(0.55,0.95,0.55,0.70), #row2 col2
+  c(0.10,0.50,0.30,0.50), #row3 col1
+  c(0.55,0.95,0.30,0.50), #row3 col2
+  c(0.10,0.50,0.05,0.25), #row4 col1
+  c(0.55,0.95,0.05,0.25)  #row4 col2
+)
+
+xlab_row1 <- 'PC1'
+ylab_row1 <- 'PC2'
+xlab_row2 <- 'Dist. (L2)'
+ylab_row2 <- '% Dists'
+xlab_row3 <- '% Dists. Sampled'
+ylab_row3 <- '1-G+'
+#xlab_row4 <- '% Dists. Sampled'
+ylab_row4 <- 'Time (s)'
+
+xlims_row3 <- c(min(pct_samps),max(pct_samps))
+xticks_row3 <- pct_samps
+xtclbs_row3 <- paste0(pct_samps*200,'%')
+
+ylims_row3 <- c(0.70,1.00)
+yticks_row3 <- c(0.80,0.80,0.90,1.00)
+ytclbs_row3 <- formatC(yticks_row3,digits=2,format='f')
+
+ylims_row4 <- c(0,800)
+yticks_row4 <- pretty(ylims_row4,4)
+ytclbs_row4 <- as.character(yticks_row4) 
+
+pdf('/users/ndyjack/Dist_Proj/figures_final/gplus_supfig.pdf',height=10,width=7)
+  plot.new()
+  par(new = "TRUE",plt = plotlocs[1,],las = 1,cex.axis = 1)
+  plot(x=pca1[,1],y=pca1[,2],pch=16,col=cols1,cex=0.7,xaxs = "i",yaxs = "i",xlab='',ylab='',xaxt='n',yaxt='n')
+  mtext(side=1,text=xlab_row1,line=0.5,las=1)
+  mtext(side=2,text=ylab_row1,line=0.5,las=3)
+
+  par(new = "TRUE",plt = plotlocs[2,],las = 1,cex.axis = 1) 
+  plot(x=pca2[,1],y=pca2[,2],pch=16,col=cols2,cex=0.7,xaxs = "i",yaxs = "i",xlab='',ylab='',xaxt='n',yaxt='n')
+  mtext(side=1,text=xlab_row1,line=0.5,las=1)
+
+  par(new = "TRUE",plt = plotlocs[3,],las = 1,cex.axis = 1)
+  hist(x=intra1,breaks=bins,main='',xlab='',ylab='',plot=T,border='blue',col=cl1,freq=F)
+  hist(x=inter1,breaks=bins,add=T,border='red',col=cl2,freq=F)
+  mtext(side=1,text=xlab_row2,line=0.5,las=1)
+  mtext(side=2,text=ylab_row2,line=0.5,las=3) 
+
+  par(new = "TRUE",plt = plotlocs[4,],las = 1,cex.axis = 1)
+  hist(x=intra2,breaks=bins,main='',xlab='',ylab='',plot=T,border='blue',col=cl1,freq=F)
+  hist(x=inter2,breaks=bins,add=T,border='red',col=cl2,freq=F)
+  mtext(side=1,text=xlab_row2,line=0.5,las=1)
+
+  par(new = "TRUE",plt = plotlocs[5,],las = 1,cex.axis = 1)
+  plot(x=0,y=0,type='n',xlim=xlims_row3,ylim=ylims_row3,xaxs = "i",yaxs = "i",xlab='',ylab='',xaxt='n',yaxt='n')
+  lines(x=pct_samps, y=sapply(gp1_estm, function(x) x[[1]]),type='b',col='blue')
+  abline(h=gp1_true,lty=1,col="black",lwd=1.1)
+  axis(side=2,labels=ytclbs_row3,at=yticks_row3,cex=1.0,,las=2,mgp=c(3, .5, 0))
+  axis(side=1,labels=xtclbs_row3,at=xticks_row3,cex=1.0,las=1,mgp=c(3, .5, 0),line=0)
+  mtext(side=1,text=xlab_row3,cex=1.1,line=1.8,font=2,las=1)
+  mtext(side=2,text=ylab_row3,cex=1.1,line=2.5,font=2,las=3)
+
+  par(new = "TRUE",plt = plotlocs[6,],las = 1,cex.axis = 1)
+  plot(x=0,y=0,type='n',xlim=xlims_row3,ylim=ylims_row3,xaxs = "i",yaxs = "i",xlab='',ylab='',xaxt='n',yaxt='n')
+  lines(x=pct_samps, y=sapply(gp2_estm, function(x) x[[1]]),type='b',col='blue')
+  abline(h=gp2_true,lty=1,col="black",lwd=1.1)
+  axis(side=1,labels=xtclbs_row3,at=xticks_row3,cex=1.0,las=1,mgp=c(3, .5, 0),line=0)
+  mtext(side=1,text=xlab_row3,cex=1.1,line=1.8,font=2,las=1)
+
+  par(new = "TRUE",plt = plotlocs[7,],las = 1,cex.axis = 1)
+  plot(x=0,y=0,type='n',xlim=xlims_row3,ylim=ylims_row4,xaxs = "i",yaxs = "i",xlab='',ylab='',xaxt='n',yaxt='n')
+  lines(x=pct_samps, y=sapply(gp1_estm, function(x) x[[2]]),type='b',col='blue')
+  abline(h=t1,lty=1,col="black",lwd=1.1,lty=2)
+  axis(side=2,labels=ytclbs_row4,at=yticks_row4,cex=1.0,,las=2,mgp=c(3, .5, 0))
+  axis(side=1,labels=xtclbs_row3,at=xticks_row3,cex=1.0,las=1,mgp=c(3, .5, 0),line=0)
+  mtext(side=1,text=xlab_row3,cex=1.1,line=1.8,font=2,las=1)
+  mtext(side=2,text=ylab_row4,cex=1.1,line=2.5,font=2,las=3)
+
+  par(new = "TRUE",plt = plotlocs[8,],las = 1,cex.axis = 1)
+  plot(x=0,y=0,type='n',xlim=xlims_row3,ylim=ylims_row4,xaxs = "i",yaxs = "i",xlab='',ylab='',xaxt='n',yaxt='n')
+  lines(x=pct_samps, y=sapply(gp2_estm, function(x) x[[2]]),type='b',col='blue')
+  abline(h=t2,lty=1,col="black",lwd=1.1,lty=2)
+  axis(side=1,labels=xtclbs_row3,at=xticks_row3,cex=1.0,las=1,mgp=c(3, .5, 0),line=0)
+  mtext(side=1,text=xlab_row3,cex=1.1,line=1.8,font=2,las=1)
+dev.off()
+
+
